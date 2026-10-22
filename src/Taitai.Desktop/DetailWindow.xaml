@@ -1,0 +1,62 @@
+<Window x:Class="Taitai.Desktop.DetailWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="苔苔 · 额度与设置" Width="366" Height="650" ResizeMode="NoResize" WindowStyle="None" AllowsTransparency="True" Background="Transparent" ShowInTaskbar="True" UseLayoutRounding="True">
+ <Border Background="{StaticResource Paper}" BorderBrush="#CDD5C2" BorderThickness="1" CornerRadius="12" Padding="18">
+  <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+   <DockPanel Margin="0,0,0,10"><Button DockPanel.Dock="Right" Content="收起" Click="CloseDetails" Padding="9,4" MinHeight="28"/><TextBlock Text="苔苔的口袋" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"/></DockPanel>
+   <TextBlock x:Name="ActivityLabel" Grid.Row="1" Text="陪你待着" Margin="0,0,0,12" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+   <TabControl Grid.Row="2" Background="Transparent" BorderThickness="0" FontFamily="Segoe UI,Microsoft YaHei UI" Padding="0,14,0,0">
+    <TabItem Header="  使用额度  "><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel Margin="0,4,8,0">
+     <StackPanel x:Name="QuotaRows"/>
+     <TextBlock x:Name="FreshnessText" FontSize="11" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+     <TextBlock x:Name="ErrorText" Foreground="#9A4D31" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10" Visibility="Collapsed"/>
+     <Button x:Name="RefreshButton" Content="刷新额度" Click="RefreshQuota"/>
+     <CheckBox x:Name="NoticeCheck" Content="剩余 20% 时提醒一次" Click="SettingsChanged" Margin="0,18,0,8"/>
+     <CheckBox x:Name="ResetCheck" Content="确认额度重置后提醒" Click="SettingsChanged"/>
+     <Button Content="选择 Codex 命令行…" Click="ChooseBinary" Margin="0,12,0,0"/>
+     <TextBlock Text="额度每 2 分钟从本机 Codex 同步。工作状态约每 2 秒读取本机会话事件；内容不上传。尚未收到事件时，状态可能延迟。" Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,14,0,0"/>
+     <TextBlock Text="按钮上的 * 表示上次数据。悬停可看重置倒计时。" Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,0"/>
+    </StackPanel></ScrollViewer></TabItem>
+    <TabItem x:Name="ChatTab" Header="  聊天状态  "><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel Margin="0,4,8,8">
+     <TextBlock x:Name="ChatHeadingText" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,7"/>
+     <TextBlock x:Name="ChatStatusText" TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,12"/>
+     <Button Content="回到这个 ChatGPT 聊天" Click="ReturnChat"/>
+     <CheckBox x:Name="ChatStatusCheck" Content="在娃娃上方显示聊天状态" Click="ChatStatusChanged" Margin="0,15,0,8"/>
+     <TextBlock Text="关联已有聊天" FontWeight="SemiBold" Margin="0,16,0,8"/>
+     <TextBlock Text="粘贴 ChatGPT 的聊天深链接或网页聊天地址。桌面客户端可用 Ctrl+Alt+L 复制深链接。" Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
+     <TextBox x:Name="ChatLinkInput" MinHeight="34" Padding="7,5" TextWrapping="Wrap" MaxLength="512" AutomationProperties.Name="已有 ChatGPT 聊天链接"/>
+     <TextBox x:Name="ChatTitleInput" MinHeight="32" Padding="7,5" MaxLength="80" Margin="0,8,0,8" AutomationProperties.Name="聊天显示名称" ToolTip="可选：聊天在桌宠中显示的名字"/>
+     <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions><Button Content="关联此聊天" Click="BindChat"/><Button Grid.Column="2" Content="跟随最近活动" Click="FollowRecent"/></Grid>
+     <TextBlock x:Name="ChatErrorText" FontSize="11" Foreground="#9A4D31" TextWrapping="Wrap" Margin="0,8,0,0"/>
+     <TextBlock x:Name="ChatSourceText" FontSize="11" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,10,0,10"/>
+     <TextBlock Text="最近的本机聊天" FontWeight="SemiBold" Margin="0,14,0,8"/>
+     <StackPanel x:Name="RecentChatRows"/>
+     <TextBlock Text="聊天按钮会打开原聊天，在 ChatGPT 中继续输入和发送，沿用原账号和历史。网页 Chat 的实时状态尚未接入；不会借用别的会话状态。" FontSize="11" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,16,0,8"/>
+    </StackPanel></ScrollViewer></TabItem>
+    <TabItem Header="  互动设置  "><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel Margin="0,0,8,8">
+     <TextBlock Text="陪伴方式" FontWeight="SemiBold" Margin="0,4,0,5"/>
+     <CheckBox x:Name="IdleCheck" Content="空闲时随机说话、做小动作" Click="SettingsChanged"/>
+     <ComboBox x:Name="FrequencyCombo" SelectedIndex="1" SelectionChanged="ComboChanged" MinHeight="30" AutomationProperties.Name="闲聊频率"><ComboBoxItem Content="安静 · 约 4–8 分钟"/><ComboBoxItem Content="平常 · 约 1.5–3.5 分钟"/><ComboBoxItem Content="活泼 · 约 45–90 秒"/></ComboBox>
+     <Grid Margin="0,9,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions><Button Content="聊一句" Click="ChatNow"/><Button Grid.Column="2" Content="召唤彩蛋" Click="EasterEgg"/></Grid>
+     <CheckBox x:Name="PointerCheck" Content="闲时看向鼠标" Click="SettingsChanged"/>
+     <CheckBox x:Name="MotionCheck" Content="减少动画" Click="SettingsChanged"/>
+     <CheckBox x:Name="PowerCheck" Content="使用电池时降低动画与同步频率" Click="SettingsChanged"/>
+     <TextBlock Text="显示与避让" FontWeight="SemiBold" Margin="0,18,0,8"/>
+     <ComboBox x:Name="LayerCombo" SelectionChanged="ComboChanged" MinHeight="30" AutomationProperties.Name="显示层级"><ComboBoxItem Content="跟着 AI · 工作、等待、刚完成时置顶"/><ComboBoxItem Content="始终置顶"/><ComboBoxItem Content="普通窗口"/></ComboBox>
+     <CheckBox x:Name="TuckCheck" Content="贴边后，空闲 10 秒自动收起" Click="SettingsChanged"/>
+     <CheckBox x:Name="FullscreenCheck" Content="所在屏幕全屏时自动隐藏" Click="SettingsChanged"/>
+     <CheckBox x:Name="HotkeyCheck" Content="启用全局隐藏快捷键" Click="SettingsChanged"/>
+     <TextBlock x:Name="HotkeyText" FontSize="11" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+     <CheckBox x:Name="StartupCheck" Content="登录 Windows 时启动" Click="StartupChanged"/>
+     <TextBlock x:Name="StartupText" FontSize="11" Foreground="#9A4D31" TextWrapping="Wrap"/>
+     <DockPanel Margin="0,14,0,5"><TextBlock Text="大小" VerticalAlignment="Center"/><TextBlock x:Name="ScaleText" DockPanel.Dock="Right" Text="100%" FontSize="12" HorizontalAlignment="Right"/><Slider x:Name="SizeSlider" Minimum="0.75" Maximum="1.4" TickFrequency="0.05" IsSnapToTickEnabled="True" ValueChanged="SizeSliderChanged" Margin="12,0" AutomationProperties.Name="桌宠大小"/></DockPanel>
+     <CheckBox x:Name="NameCheck" Content="显示名字" Click="SettingsChanged"/>
+     <DockPanel><Button Content="改名" DockPanel.Dock="Right" Click="Rename" Margin="8,0,0,0"/><TextBox x:Name="NameInput" MaxLength="12" VerticalContentAlignment="Center" Padding="7,4" AutomationProperties.Name="桌宠名字"/></DockPanel>
+     <TextBlock Text="本地互动包" FontWeight="SemiBold" Margin="0,18,0,7"/>
+     <TextBlock x:Name="PluginText" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource Muted}" Margin="0,0,0,8"/>
+     <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions><Button Content="打开文件夹" Click="OpenPlugins"/><Button Grid.Column="2" Content="重新加载" Click="ReloadPlugins"/></Grid>
+     <TextBlock Text="互动只显示文字并播放已有动作，不调用模型。单击摸头，双击跳跃；快速左右拖动会晃晕她，再摸摸头就好。" FontSize="11" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,12,0,12"/>
+     <Button Content="退出苔苔" Click="ExitPet" Background="Transparent"/>
+    </StackPanel></ScrollViewer></TabItem>
+   </TabControl>
+  </Grid>
+ </Border>
+</Window>

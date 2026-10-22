@@ -1,0 +1,27 @@
+{
+  "id": "taitai-idle",
+  "version": 1,
+  "enabled": true,
+  "entries": [
+    {"text":"我在这里，慢慢来就好。","action":"wave","weight":4},
+    {"text":"刚刚那下眨眼，你看见了吗？","action":"idle","weight":3},
+    {"text":"今天的毛线没有打结，真不错。","action":"review","weight":3},
+    {"text":"我在想，毛线会不会也做梦。","action":"think","weight":3},
+    {"text":"偷偷蹦一下，没人发现吧。","action":"jump","weight":2,"cooldownSeconds":420},
+    {"text":"让我看看，你是不是又在偷偷努力。","action":"review","weight":3},
+    {"text":"眼镜擦好了，继续认真看世界。","action":"review","weight":3},
+    {"text":"头发有点乱，但问题不大。","action":"shy","weight":2},
+    {"text":"刚刚好像有灵感从头顶飘过去。","action":"look-up","weight":2},
+    {"text":"左边没有打结的毛线，检查完毕。","action":"look-left","weight":2},
+    {"text":"右边也检查一下。嗯，都好好的。","action":"look-right","weight":2},
+    {"text":"不用一直看我，我会自己乖乖待着。","action":"idle","weight":3},
+    {"text":"这双红鞋，蹦起来还挺轻。","action":"jump","weight":2,"cooldownSeconds":420},
+    {"text":"我宣布，这里是我的小小工位。","action":"wave","weight":3},
+    {"text":"发呆也是毛线娃娃的一项技能。","action":"think","weight":3},
+    {"text":"我就偷偷蹦两下。真的就两下。","action":"double-jump","weight":1,"cooldownSeconds":1200},
+    {"text":"早呀，今天也一起慢慢来。","action":"wave","when":"morning","weight":4,"cooldownSeconds":3600},
+    {"text":"屏幕还亮着，我也还醒着。","action":"look-up","when":"night","weight":3,"cooldownSeconds":1800},
+    {"text":"夜里很安静，连毛线都轻轻的。","action":"idle","when":"night","weight":3,"cooldownSeconds":1800},
+    {"text":"额度不多啦，我先安静陪着你。","action":"idle","when":"low-quota","weight":2,"cooldownSeconds":3600}
+  ]
+}

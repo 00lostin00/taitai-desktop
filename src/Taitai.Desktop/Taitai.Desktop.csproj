@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms><Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings><AssemblyName>Taitai</AssemblyName>
+    <ApplicationIcon>Assets/taitai.ico</ApplicationIcon>
+    <Version>0.3.0</Version><Description>苔苔 · 聊天入口、状态与额度桌宠</Description>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../Taitai.Core/Taitai.Core.csproj" /></ItemGroup>
+  <ItemGroup><Content Include="Assets/*"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content></ItemGroup>
+  <ItemGroup><Content Include="Plugins/*.json"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content></ItemGroup>
+</Project>

@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.pdb
+*.log
+.local/
+dist/
+outputs/
+work/
+*.zip
+.env
+.env.*
