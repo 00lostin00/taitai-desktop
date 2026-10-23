@@ -298,8 +298,10 @@ public partial class PetWindow : Window
         var cursor = Forms.Cursor.Position;
         if (tucked)
         {
-            var near = EdgeHandle.PointFromScreen(new Point(cursor.X, cursor.Y));
-            if (near.X >= -10 && near.X <= EdgeHandle.ActualWidth + 10 && near.Y >= -10 && near.Y <= EdgeHandle.ActualHeight + 10) Touch();
+            var peekFrame = frames[0][Settings.ReduceMotion ? 0 : timelines[0].FrameAt(elapsed)];
+            if (!ReferenceEquals(PeekImage.Source, peekFrame)) PeekImage.Source = peekFrame;
+            var near = EdgePeek.PointFromScreen(new Point(cursor.X, cursor.Y));
+            if (near.X >= -10 && near.X <= EdgePeek.ActualWidth + 10 && near.Y >= -10 && near.Y <= EdgePeek.ActualHeight + 10) Touch();
             return;
         }
         var row = Settings.ReduceMotion ? 0 : dragging ? (cursor.X < lastDragX ? 2 : 1) : gestureUntil > now ? gestureRow : Activity.State switch
@@ -382,18 +384,22 @@ public partial class PetWindow : Window
         var work = WorkArea(); expandedLeft = DockedLeft(work); tucked = true;
         Settings.DockSide = dockSide; Settings.Left = expandedLeft; Settings.Top = Top; Settings.Save();
         SyncGlassVisibility(); SpeechBubble.Visibility = Visibility.Collapsed; NameText.Visibility = Visibility.Collapsed; PetImage.Visibility = Visibility.Collapsed;
-        EdgeHandle.HorizontalAlignment = dockSide == "left" ? HorizontalAlignment.Right : HorizontalAlignment.Left;
-        EdgeChevron.RenderTransform = new ScaleTransform(dockSide == "left" ? 1 : -1, 1);
-        EdgeHandle.Visibility = Visibility.Visible;
-        var handleWidth = EdgeHandle.Width * Settings.Scale;
-        Left = dockSide == "left" ? work.Left - Width + handleWidth : work.Right - handleWidth;
+        // Turn the doll toward the desktop; the screen edge conceals her body.
+        var leftEdge = dockSide == "left";
+        EdgePeek.HorizontalAlignment = leftEdge ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        PeekImage.HorizontalAlignment = leftEdge ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        PeekImage.LayoutTransform = new RotateTransform(leftEdge ? 90 : -90);
+        PeekImage.Source = frames[0][0];
+        EdgePeek.Visibility = Visibility.Visible;
+        var peekWidth = EdgePeek.Width * Settings.Scale;
+        Left = leftEdge ? work.Left - Width + peekWidth : work.Right - peekWidth;
     }
     void Expand()
     {
-        if (!tucked) return; tucked = false; EdgeHandle.Visibility = Visibility.Collapsed; PetImage.Visibility = Visibility.Visible;
+        if (!tucked) return; tucked = false; EdgePeek.Visibility = Visibility.Collapsed; PetImage.Visibility = Visibility.Visible;
         Left = expandedLeft; NameText.Visibility = Settings.ShowName ? Visibility.Visible : Visibility.Collapsed; ClampToScreen(); SyncGlassVisibility();
     }
-    void ExpandFromEdge(object sender, RoutedEventArgs e) => Touch();
+    void ExpandFromEdge(object sender, MouseButtonEventArgs e) { Touch(); e.Handled = true; }
     double DockedLeft(Rect work) => dockSide == "left" ? work.Left : work.Right - Width;
     string NearestDockSide(Rect work)
     {

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -76,20 +77,28 @@ public sealed class CheckApplication : Application
             Check(floating.All(IsTopmost), "restoring always-float restores the whole native group");
             var work = pet.CurrentWorkArea();
             pet.Top = work.Top + 40;
-            var handle = (Button)pet.FindName("EdgeHandle");
+            var handle = (FrameworkElement)pet.FindName("EdgePeek");
+            var peekImage = (Image)pet.FindName("PeekImage");
             foreach (var side in new[] { "left", "right" })
             {
                 pet.DockToEdge(side); await Task.Delay(150);
-                Check(handle.IsVisible && !image.IsVisible && companions.All(window => !window.IsVisible), side + " docking replaces the pet and companions with a handle");
+                Check(handle.IsVisible && !image.IsVisible && companions.All(window => !window.IsVisible), side + " docking replaces the pet and companions with a peeking head");
                 var visibleWidth = side == "left" ? pet.Left + pet.Width - work.Left : work.Right - pet.Left;
-                Check(Math.Abs(visibleWidth - handle.Width * settings.Scale) < 1, side + " handle stays inside the screen at the configured scale");
+                Check(Math.Abs(visibleWidth - handle.Width * settings.Scale) < 1, side + " peeking head stays inside the screen at the configured scale");
                 var handleOrigin = pet.PointFromScreen(handle.PointToScreen(new Point(0, 0)));
                 var expectedLeft = side == "left" ? work.Left : work.Right - handle.Width * settings.Scale;
-                Check(Math.Abs(pet.Left + handleOrigin.X - expectedLeft) < 1, side + " rendered handle is aligned with the visible edge");
+                Check(Math.Abs(pet.Left + handleOrigin.X - expectedLeft) < 1, side + " rendered head is aligned with the visible edge");
+                var peekChanges = 0;
+                EventHandler onPeekChanged = (_, _) => peekChanges++;
+                var peekDescriptor = DependencyPropertyDescriptor.FromProperty(Image.SourceProperty, typeof(Image));
+                peekDescriptor.AddValueChanged(peekImage, onPeekChanged);
+                await Task.Delay(1100);
+                peekDescriptor.RemoveValueChanged(peekImage, onPeekChanged);
+                Check(peekChanges >= 3, side + " peeking head keeps blinking while tucked");
                 Capture(handle, side);
                 Check(settings.DockSide == side && settings.Left >= work.Left && settings.Left + pet.Width <= work.Right + 1, side + " docking saves the expanded position rather than the offscreen one");
-                handle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Task.Delay(100);
-                Check(!handle.IsVisible && image.IsVisible && companions.All(window => window.IsVisible) && floating.All(IsTopmost), side + " handle restores the complete floating group");
+                handle.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonDownEvent }); await Task.Delay(100);
+                Check(!handle.IsVisible && image.IsVisible && companions.All(window => window.IsVisible) && floating.All(IsTopmost), side + " peeking head restores the complete floating group");
             }
             pet.Left = work.Left + (work.Width - pet.Width) / 2; pet.SnapToScreenEdge();
             Check(settings.DockSide == "", "dragging away from the edge clears docking");
