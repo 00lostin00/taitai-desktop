@@ -95,6 +95,8 @@ public sealed class CheckApplication : Application
                 await Task.Delay(1100);
                 peekDescriptor.RemoveValueChanged(peekImage, onPeekChanged);
                 Check(peekChanges >= 3, side + " peeking head keeps blinking while tucked");
+                var bodyTilt = (SkewTransform)pet.FindName("PeekBodyTilt");
+                Check(peekImage.RenderTransform.Value.IsIdentity && peekImage.LayoutTransform.Value.IsIdentity && (side == "left" ? -bodyTilt.AngleX : bodyTilt.AngleX) is > 30 and < 40, side + " head stays upright while only the lower body leans outward");
                 Capture(handle, side);
                 Check(settings.DockSide == side && settings.Left >= work.Left && settings.Left + pet.Width <= work.Right + 1, side + " docking saves the expanded position rather than the offscreen one");
                 handle.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonDownEvent }); await Task.Delay(100);

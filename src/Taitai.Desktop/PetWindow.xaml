@@ -3,8 +3,11 @@
   <Image x:Name="PetImage" Width="192" Height="208" Margin="0,36,0,64" Stretch="Fill" HorizontalAlignment="Center" VerticalAlignment="Top" MouseLeftButtonDown="PetMouseDown" Cursor="Hand" ToolTip="拖动移动；单击摸头；双击跳跃；右键打开菜单" AutomationProperties.Name="苔苔，拖动移动，单击摸头，双击跳跃" RenderOptions.BitmapScalingMode="HighQuality"/>
   <Border x:Name="SpeechBubble" Visibility="Collapsed" VerticalAlignment="Top" HorizontalAlignment="Center" MaxWidth="310" Background="#ECF8F7F0" BorderBrush="#9AD5DDCC" BorderThickness="1" CornerRadius="12" Padding="11,7" IsHitTestVisible="False"><TextBlock x:Name="SpeechText" TextWrapping="Wrap" FontSize="12" MaxWidth="284" TextAlignment="Center"/></Border>
   <TextBlock x:Name="NameText" Text="苔苔" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,246,0,0" FontSize="11" Foreground="#354A35" IsHitTestVisible="False"/>
-  <Grid x:Name="EdgePeek" Visibility="Collapsed" Width="108" Height="192" VerticalAlignment="Center" HorizontalAlignment="Left" ClipToBounds="True" Cursor="Hand" MouseLeftButtonDown="ExpandFromEdge" ToolTip="我在这里，鼠标靠近就出来；拖离边缘取消贴边" AutomationProperties.Name="探头的苔苔，靠近或点击展开">
-   <Image x:Name="PeekImage" Width="192" Height="208" HorizontalAlignment="Right" VerticalAlignment="Center" Stretch="Fill" RenderOptions.BitmapScalingMode="HighQuality"/>
+  <Grid x:Name="EdgePeek" Visibility="Collapsed" Width="124" Height="208" Margin="0,36,0,0" VerticalAlignment="Top" HorizontalAlignment="Left" ClipToBounds="True" Cursor="Hand" MouseLeftButtonDown="ExpandFromEdge" ToolTip="我在这里，鼠标靠近就出来；拖离边缘取消贴边" AutomationProperties.Name="探头的苔苔，靠近或点击展开">
+   <Grid x:Name="PeekDoll" Width="192" Height="208" HorizontalAlignment="Right" VerticalAlignment="Top">
+    <Image x:Name="PeekBody" Width="192" Height="98" Margin="0,110,0,0" VerticalAlignment="Top" Stretch="Fill" RenderOptions.BitmapScalingMode="HighQuality"><Image.RenderTransform><SkewTransform x:Name="PeekBodyTilt" CenterY="0"/></Image.RenderTransform></Image>
+    <Image x:Name="PeekImage" Width="192" Height="110" VerticalAlignment="Top" Stretch="Fill" RenderOptions.BitmapScalingMode="HighQuality"/>
+   </Grid>
   </Grid>
  </Grid>
 </Window>

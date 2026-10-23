@@ -31,6 +31,7 @@ public partial class PetWindow : Window
     readonly DispatcherTimer animation = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
     readonly DispatcherTimer clock = new() { Interval = TimeSpan.FromSeconds(1) };
     readonly BitmapSource[][] frames = new BitmapSource[11][];
+    readonly BitmapSource[] peekHeads, peekBodies;
     readonly Forms.NotifyIcon tray;
     readonly IdleInteractions interactions = new();
     GlassBarWindow? glass;
@@ -65,6 +66,7 @@ public partial class PetWindow : Window
     readonly PointerAttention pointerAttention = new();
     readonly SpriteTimeline[] timelines = Durations.Select(values => new SpriteTimeline(values)).ToArray();
     TimeSpan rowStarted;
+    TimeSpan peekStarted;
     DateTimeOffset gestureUntil;
     DateTimeOffset manualTuckUntil;
     int gestureRow = -1;
@@ -94,6 +96,12 @@ public partial class PetWindow : Window
             frames[row] = new BitmapSource[count];
             for (var col = 0; col < count; col++) { var image = new CroppedBitmap(sheet, new Int32Rect(col * 192, row * 208, 192, 208)); image.Freeze(); frames[row][col] = image; }
         }
+        BitmapSource CropPeek(BitmapSource frame, Int32Rect bounds)
+        {
+            var crop = new CroppedBitmap(frame, bounds); crop.Freeze(); return crop;
+        }
+        peekHeads = frames[0].Select(frame => CropPeek(frame, new Int32Rect(0, 0, 192, 110))).ToArray();
+        peekBodies = frames[0].Select(frame => CropPeek(frame, new Int32Rect(0, 110, 192, 98))).ToArray();
         PetImage.Source = frames[0][0];
         tray = new Forms.NotifyIcon { Text = "苔苔 · Codex 桌宠", Icon = new System.Drawing.Icon(Path.Combine(AppContext.BaseDirectory, "Assets", "taitai.ico")), Visible = true };
         var trayMenu = new Forms.ContextMenuStrip();
@@ -298,8 +306,13 @@ public partial class PetWindow : Window
         var cursor = Forms.Cursor.Position;
         if (tucked)
         {
-            var peekFrame = frames[0][Settings.ReduceMotion ? 0 : timelines[0].FrameAt(elapsed)];
-            if (!ReferenceEquals(PeekImage.Source, peekFrame)) PeekImage.Source = peekFrame;
+            var frame = Settings.ReduceMotion ? 0 : timelines[0].FrameAt(elapsed);
+            if (!ReferenceEquals(PeekImage.Source, peekHeads[frame])) { PeekImage.Source = peekHeads[frame]; PeekBody.Source = peekBodies[frame]; }
+            var seconds = (elapsed - peekStarted).TotalSeconds;
+            var progress = Settings.ReduceMotion ? 1 : Math.Clamp(seconds / .28, 0, 1);
+            var settle = 1 - Math.Pow(1 - progress, 3);
+            var sway = Settings.ReduceMotion ? 0 : Math.Sin(seconds * Math.PI / 1.8) * 2.5 * progress;
+            PeekBodyTilt.AngleX = (dockSide == "left" ? -1 : 1) * (35 * settle + sway);
             var near = EdgePeek.PointFromScreen(new Point(cursor.X, cursor.Y));
             if (near.X >= -10 && near.X <= EdgePeek.ActualWidth + 10 && near.Y >= -10 && near.Y <= EdgePeek.ActualHeight + 10) Touch();
             return;
@@ -384,12 +397,12 @@ public partial class PetWindow : Window
         var work = WorkArea(); expandedLeft = DockedLeft(work); tucked = true;
         Settings.DockSide = dockSide; Settings.Left = expandedLeft; Settings.Top = Top; Settings.Save();
         SyncGlassVisibility(); SpeechBubble.Visibility = Visibility.Collapsed; NameText.Visibility = Visibility.Collapsed; PetImage.Visibility = Visibility.Collapsed;
-        // Turn the doll toward the desktop; the screen edge conceals her body.
+        // The head stays upright while the body leans behind the screen edge.
         var leftEdge = dockSide == "left";
         EdgePeek.HorizontalAlignment = leftEdge ? HorizontalAlignment.Right : HorizontalAlignment.Left;
-        PeekImage.HorizontalAlignment = leftEdge ? HorizontalAlignment.Right : HorizontalAlignment.Left;
-        PeekImage.LayoutTransform = new RotateTransform(leftEdge ? 90 : -90);
-        PeekImage.Source = frames[0][0];
+        PeekDoll.HorizontalAlignment = leftEdge ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        PeekImage.Source = peekHeads[0]; PeekBody.Source = peekBodies[0];
+        peekStarted = animationTime.Elapsed; PeekBodyTilt.AngleX = Settings.ReduceMotion ? (leftEdge ? -35 : 35) : 0;
         EdgePeek.Visibility = Visibility.Visible;
         var peekWidth = EdgePeek.Width * Settings.Scale;
         Left = leftEdge ? work.Left - Width + peekWidth : work.Right - peekWidth;
