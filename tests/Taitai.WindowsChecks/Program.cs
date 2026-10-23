@@ -108,6 +108,16 @@ public sealed class CheckApplication : Application
             Check(settings.DockSide == "" && Math.Abs(pet.Left - work.Left - 8) < 1, "disabled docking leaves the dropped position alone");
             settings.EdgeTuck = true; pet.SnapToScreenEdge(); pet.Touch();
             Check(settings.DockSide == "left" && Math.Abs(pet.Left - work.Left) < 1, "near-edge drops snap to the edge");
+            foreach (var side in new[] { "left", "right" })
+            {
+                pet.Left = side == "left" ? work.Left + 60 * settings.Scale : work.Right - pet.Width - 60 * settings.Scale;
+                pet.SnapToScreenEdge(tuck: true); await Task.Delay(100);
+                Check(settings.DockSide == side && handle.IsVisible, side + " dropping nearby immediately snaps and peeks without a menu or idle wait");
+                pet.Touch();
+            }
+            pet.Left = work.Left + 130 * settings.Scale; pet.SnapToScreenEdge(tuck: true);
+            Check(settings.DockSide == "" && !handle.IsVisible, "positions beyond the attraction zone stay free");
+            pet.Left = work.Left + 8; pet.SnapToScreenEdge(); pet.Touch();
             await Task.Delay(4300);
             Check(handle.IsVisible, "an idle docked pet automatically tucks after three seconds");
             settings.EdgeTuck = false; pet.ApplySettings(); await Task.Delay(100);

@@ -68,7 +68,6 @@ public partial class PetWindow : Window
     TimeSpan rowStarted;
     TimeSpan peekStarted;
     DateTimeOffset gestureUntil;
-    DateTimeOffset manualTuckUntil;
     int gestureRow = -1;
     int currentRow = -1;
     bool dragging, tucked, closing, activityInFlight, companionSyncPending;
@@ -258,7 +257,7 @@ public partial class PetWindow : Window
         if (now >= speechUntil) SpeechBubble.Visibility = Visibility.Collapsed;
         if (Settings.IdleInteraction && IsVisible && !tucked && !dragging && !IsMouseOver && glass?.IsMouseOver != true && details is null && !ContextMenu.IsOpen && Activity.State == PetActivity.Idle && (now - lastInteraction).TotalSeconds > 45 && now >= nextIdle)
             RandomInteraction(false);
-        if (Settings.EdgeTuck && IsVisible && !tucked && !dragging && !IsMouseOver && glass?.IsMouseOver != true && chatStatus?.IsMouseOver != true && details is null && !ContextMenu.IsOpen && Activity.State is PetActivity.Idle or PetActivity.Complete && (now - lastInteraction).TotalSeconds > 3 && now >= speechUntil)
+        if (Settings.EdgeTuck && IsVisible && !tucked && !dragging && !IsMouseOver && glass?.IsMouseOver != true && chatStatus?.IsMouseOver != true && details is null && !ContextMenu.IsOpen && (now - lastInteraction).TotalSeconds > 3 && now >= speechUntil)
         {
             var work = WorkArea();
             dockSide = NearestDockSide(work);
@@ -285,7 +284,6 @@ public partial class PetWindow : Window
         if (closing) return;
         if (preferred is not null && Activity.ThreadId is null) Activity = Activity with { ThreadId = preferred.ThreadId, Title = Settings.ChatTitle };
         if (prior != Activity.State) lastInteraction = now;
-        if (now >= manualTuckUntil && Activity.State is PetActivity.Thinking or PetActivity.Tool or PetActivity.Waiting) Expand();
         UpdateCompact(); UpdateLayer(); DataChanged?.Invoke();
     }
 
@@ -371,7 +369,7 @@ public partial class PetWindow : Window
         if (Math.Abs(before.X - Left) + Math.Abs(before.Y - Top) < 4) { Gesture(3); Say("嗯，摸摸头就不生气啦。"); }
         else
         {
-            SnapToScreenEdge();
+            SnapToScreenEdge(tuck: true);
             if (shakeCount >= 2) { Gesture(shakeCount >= 5 ? 5 : 6); Say(shakeCount >= 5 ? "哼，头发都晃成毛线团了！" : "转晕啦……让我站稳一下。"); }
         }
     }
@@ -417,21 +415,22 @@ public partial class PetWindow : Window
     string NearestDockSide(Rect work)
     {
         var left = Math.Abs(Left - work.Left); var right = Math.Abs(work.Right - (Left + Width));
-        return Math.Min(left, right) <= 32 * Settings.Scale ? (left <= right ? "left" : "right") : "";
+        return Math.Min(left, right) <= 96 * Settings.Scale ? (left <= right ? "left" : "right") : "";
     }
-    public void SnapToScreenEdge()
+    public void SnapToScreenEdge(bool tuck = false)
     {
         ClampToScreen(); var work = WorkArea();
         dockSide = Settings.EdgeTuck ? NearestDockSide(work) : "";
         if (dockSide.Length > 0) Left = DockedLeft(work);
         Settings.DockSide = dockSide; Settings.Left = Left; Settings.Top = Top; Settings.Save();
+        if (tuck && dockSide.Length > 0) Tuck();
     }
     public void DockToEdge(string side)
     {
         if (side is not ("left" or "right")) throw new ArgumentException("Choose left or right.", nameof(side));
         Expand(); Settings.EdgeTuck = true; dockSide = side;
         Left = DockedLeft(WorkArea()); ClampToScreen();
-        manualTuckUntil = DateTimeOffset.UtcNow.AddMinutes(1); Tuck();
+        Tuck();
     }
     Rect WorkArea()
     {
