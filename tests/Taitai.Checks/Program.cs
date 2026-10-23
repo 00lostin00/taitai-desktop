@@ -78,6 +78,16 @@ var childId = "33333333-3333-4333-8333-333333333333";
 File.WriteAllText(Path.Combine(namedDay, "rollout-" + childId + ".jsonl"), JsonSerializer.Serialize(new { type = "session_meta", payload = new { id = childId, source = new { subagent = new { parent_thread_id = chatId } } } }) + "\n" + new string('x', 1_050_000) + "\n" + Event("response_item", "function_call", "request_user_input") + "\n");
 var onlyMain = new ActivityWatcher(namedRoot); onlyMain.Poll(now);
 Check(onlyMain.Recent.All(x => x.ThreadId != childId), "subagent activity stays out of recent-chat selection even when its metadata is outside the tailed megabyte");
+var timeline = new SpriteTimeline(new[] { 100, 120, 80 });
+Check(timeline.FrameAt(TimeSpan.FromMilliseconds(100)) == 1 && timeline.FrameAt(TimeSpan.FromMilliseconds(219)) == 1 && timeline.FrameAt(TimeSpan.FromMilliseconds(220)) == 2, "animation honors frame boundaries independently of timer granularity");
+Check(timeline.FrameAt(TimeSpan.FromMilliseconds(925)) == 0 && timeline.FrameAt(TimeSpan.FromMilliseconds(1145)) == 2, "animation catches up after a delayed UI tick without stretching the cycle");
+var attention = new PointerAttention();
+Check(!attention.Update(100, 100, TimeSpan.Zero, true), "stationary cursor does not freeze initial idle animation");
+Check(attention.Update(130, 100, TimeSpan.FromMilliseconds(20), true), "pointer motion briefly selects a look direction");
+Check(!attention.Update(130, 100, TimeSpan.FromMilliseconds(650), true), "idle animation resumes after the cursor stops moving");
+Check(!attention.Update(150, 100, TimeSpan.FromMilliseconds(700), false) && !attention.Update(150, 100, TimeSpan.FromMilliseconds(710), true), "work animation clears stale pointer attention");
+Check(FloatingPolicy.IsTopmost("always", PetActivity.Idle, false) && FloatingPolicy.IsTopmost("always", PetActivity.Thinking, false), "always-float survives work-to-idle transitions");
+Check(!FloatingPolicy.IsTopmost("normal", PetActivity.Thinking, true) && !FloatingPolicy.IsTopmost("follow", PetActivity.Idle, false) && FloatingPolicy.IsTopmost("follow", PetActivity.Waiting, false), "explicit ordinary and follow-AI modes retain their intended behavior");
 if (args.Contains("--live"))
 {
     var live = await new CodexQuotaClient().ReadAsync(null, CancellationToken.None);

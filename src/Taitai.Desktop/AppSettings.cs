@@ -2,12 +2,14 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Taitai.Desktop;
 public sealed class AppSettings
 {
+    [JsonIgnore] public bool SaveEnabled { get; set; } = true;
     public bool Topmost { get; set; } = true;
-    public string LayerMode { get; set; } = "follow";
+    public string LayerMode { get; set; } = "always";
     public bool IdleInteraction { get; set; } = true;
     public string InteractionFrequency { get; set; } = "normal";
     public bool FullscreenAvoidance { get; set; } = true;
@@ -45,6 +47,7 @@ public sealed class AppSettings
     }
     public void Save()
     {
+        if (!SaveEnabled) return;
         try { Directory.CreateDirectory(DataDirectory); var tmp = FilePath + ".tmp"; File.WriteAllText(tmp, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true })); File.Move(tmp, FilePath, true); } catch { }
     }
 }

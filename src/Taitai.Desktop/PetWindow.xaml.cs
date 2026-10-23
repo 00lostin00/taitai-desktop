@@ -18,7 +18,7 @@ using Taitai.Core;
 namespace Taitai.Desktop;
 public partial class PetWindow : Window
 {
-    public AppSettings Settings { get; } = AppSettings.Load();
+    public AppSettings Settings { get; }
     public QuotaSnapshot? Quota { get; private set; }
     public string? QuotaError { get; private set; }
     public bool Refreshing { get; private set; }
@@ -27,7 +27,8 @@ public partial class PetWindow : Window
     readonly CancellationTokenSource lifetime = new();
     readonly SemaphoreSlim polling = new(1, 1);
     readonly ActivityWatcher watcher;
-    readonly DispatcherTimer animation = new() { Interval = TimeSpan.FromMilliseconds(70) };
+    readonly bool monitorServices;
+    readonly DispatcherTimer animation = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
     readonly DispatcherTimer clock = new() { Interval = TimeSpan.FromSeconds(1) };
     readonly BitmapSource[][] frames = new BitmapSource[11][];
     readonly Forms.NotifyIcon tray;
@@ -60,12 +61,15 @@ public partial class PetWindow : Window
     DateTimeOffset nextQuota = DateTimeOffset.MinValue;
     DateTimeOffset lastInteraction = DateTimeOffset.UtcNow;
     DateTimeOffset lastActivityPoll;
-    DateTimeOffset lastFrame;
+    readonly Stopwatch animationTime = Stopwatch.StartNew();
+    readonly PointerAttention pointerAttention = new();
+    readonly SpriteTimeline[] timelines = Durations.Select(values => new SpriteTimeline(values)).ToArray();
+    TimeSpan rowStarted;
     DateTimeOffset gestureUntil;
     DateTimeOffset manualTuckUntil;
     int gestureRow = -1;
-    int currentRow = -1, currentFrame;
-    bool dragging, tucked, closing, activityInFlight;
+    int currentRow = -1;
+    bool dragging, tucked, closing, activityInFlight, companionSyncPending;
     string dockSide = "";
     double expandedLeft;
     int failures;
@@ -76,8 +80,10 @@ public partial class PetWindow : Window
         new[]{150,150,150,150,150,260}, new[]{120,120,120,120,120,220}, new[]{150,150,150,150,150,280}
     };
 
-    public PetWindow()
+    public PetWindow(AppSettings? settings = null, bool monitorServices = true)
     {
+        Settings = settings ?? AppSettings.Load();
+        this.monitorServices = monitorServices;
         InitializeComponent();
         var codexHome = Environment.GetEnvironmentVariable("CODEX_HOME");
         watcher = new(Path.Combine(string.IsNullOrWhiteSpace(codexHome) ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex") : codexHome, "sessions"));
@@ -110,19 +116,25 @@ public partial class PetWindow : Window
             Left = Settings.Left ?? work.Right - Width - 32; Top = Settings.Top ?? work.Bottom - Height - 24;
             ClampToScreen();
             glass = new GlassBarWindow(this); glass.Show(); glass.Sync();
-            chatStatus = new ChatStatusWindow(this); SyncGlassVisibility();
+            chatStatus = new ChatStatusWindow(this); SyncGlassVisibility(); UpdateLayer();
             animation.Tick += Animate; animation.Start();
             clock.Tick += ClockTick; clock.Start();
-            await RefreshQuotaAsync();
+            if (monitorServices) await RefreshQuotaAsync();
         };
         Closing += OnClosing;
         LocationChanged += (_, _) =>
         {
-            glass?.Sync();
-            chatStatus?.Sync();
+            QueueCompanionSync();
             if (dragging) { var delta = Left - priorDragLeft; var now = DateTimeOffset.UtcNow; if (Math.Abs(delta) > 12) { var direction = Math.Sign(delta); if (direction != dragDirection && (now - priorDragTime).TotalMilliseconds < 650) shakeCount++; dragDirection = direction; priorDragTime = now; priorDragLeft = Left; } }
         };
-        IsVisibleChanged += (_, _) => SyncGlassVisibility();
+        IsVisibleChanged += (_, _) =>
+        {
+            SyncGlassVisibility();
+            if (!IsLoaded || closing) return;
+            if (IsVisible) { currentRow = -1; animation.Start(); }
+            else animation.Stop();
+        };
+        DpiChanged += (_, _) => QueueCompanionSync();
     }
 
     ContextMenu BuildMenu()
@@ -138,11 +150,14 @@ public partial class PetWindow : Window
         Item("随便聊一句", () => RandomInteraction(true));
         Item("召唤彩蛋", () => { Say("看好了，毛线弹簧启动！"); Gesture(4, 2); });
         Item("设置…", ShowDetails);
+        var floatItem = new MenuItem { Header = "始终悬浮在其他窗口上方", IsCheckable = true };
+        floatItem.Click += (_, _) => { Settings.LayerMode = floatItem.IsChecked ? "always" : "follow"; ApplySettings(); UpdateLayer(true); };
+        menu.Items.Add(floatItem);
         menu.Items.Add(new Separator());
         Item("收起到最近的屏幕边缘", () => { var w = WorkArea(); dockSide = Left + Width / 2 < w.Left + w.Width / 2 ? "left" : "right"; manualTuckUntil = DateTimeOffset.UtcNow.AddMinutes(1); Tuck(); });
         Item("暂时隐藏（Ctrl+Alt+P 恢复）", HideManually);
         Item("退出苔苔", Close);
-        menu.Opened += (_, _) => { lastInteraction = DateTimeOffset.UtcNow; Expand(); };
+        menu.Opened += (_, _) => { floatItem.IsChecked = Settings.LayerMode == "always"; lastInteraction = DateTimeOffset.UtcNow; Expand(); };
         return menu;
     }
 
@@ -165,7 +180,7 @@ public partial class PetWindow : Window
         try
         {
             Refreshing = true; DataChanged?.Invoke();
-            var value = await new CodexQuotaClient().ReadAsync(Settings.CodexBinary, lifetime.Token);
+            var value = await Task.Run(() => new CodexQuotaClient().ReadAsync(Settings.CodexBinary, lifetime.Token), lifetime.Token);
             if (closing) return;
             if (Settings.ResetNotice && Quota is not null)
                 foreach (var window in value.Windows)
@@ -196,28 +211,17 @@ public partial class PetWindow : Window
         }
     }
 
-    async void ClockTick(object? sender, EventArgs e)
+    void ClockTick(object? sender, EventArgs e)
     {
         var now = DateTimeOffset.UtcNow;
-        animation.Interval = TimeSpan.FromMilliseconds(SavingPower ? 140 : 70);
-        if ((now - lastActivityPoll).TotalSeconds >= (SavingPower ? 4 : 2) && !activityInFlight)
+        var pulse = TimeSpan.FromMilliseconds(Settings.ReduceMotion ? 200 : SavingPower ? 100 : 33);
+        if (animation.Interval != pulse) animation.Interval = pulse;
+        if (monitorServices && (now - lastActivityPoll).TotalSeconds >= (SavingPower ? 4 : 2) && !activityInFlight)
         {
-            lastActivityPoll = now; activityInFlight = true; var prior = Activity.State;
-            var preferred = ChatLink.Parse(Settings.ChatUrl);
-            try
-            {
-                var observed = await Task.Run(() => watcher.Poll(now, preferred?.ThreadId), lifetime.Token);
-                Activity = preferred is { IsLocal: false } ? new(PetActivity.Idle, 0, default, true, "未接入聊天状态") { ThreadId = preferred.ThreadId, Title = Settings.ChatTitle } : observed;
-            }
-            catch (OperationCanceledException) { return; }
-            catch { Activity = new(PetActivity.Idle, 0, default, true, "会话暂不可读"); }
-            finally { activityInFlight = false; }
-            if (closing) return;
-            if (preferred is not null && Activity.ThreadId is null) Activity = Activity with { ThreadId = preferred.ThreadId, Title = Settings.ChatTitle };
-            if (prior != Activity.State) lastInteraction = now;
-            if (now >= manualTuckUntil && Activity.State is PetActivity.Thinking or PetActivity.Tool or PetActivity.Waiting) Expand();
+            lastActivityPoll = now;
+            _ = RefreshActivityAsync(now);
         }
-        if (now >= nextQuota && !Refreshing) _ = RefreshQuotaAsync();
+        if (monitorServices && now >= nextQuota && !Refreshing) _ = RefreshQuotaAsync();
         if (Quota is not null)
             foreach (var w in Quota.Windows)
                 if (w.ResetAt is not null && now >= w.ResetAt && expiredRefreshes.Add(w.NotificationKey) && !Refreshing) _ = RefreshQuotaAsync();
@@ -240,20 +244,45 @@ public partial class PetWindow : Window
         }
     }
 
+    async Task RefreshActivityAsync(DateTimeOffset now)
+    {
+        activityInFlight = true;
+        var prior = Activity.State;
+        var preferred = ChatLink.Parse(Settings.ChatUrl);
+        try
+        {
+            var observed = await Task.Run(() => watcher.Poll(now, preferred?.ThreadId), lifetime.Token);
+            if (closing) return;
+            // A newly selected chat must not receive an in-flight result for the old selection.
+            if (preferred?.Url != ChatLink.Parse(Settings.ChatUrl)?.Url) return;
+            Activity = preferred is { IsLocal: false } ? new(PetActivity.Idle, 0, default, true, "未接入聊天状态") { ThreadId = preferred.ThreadId, Title = Settings.ChatTitle } : observed;
+        }
+        catch (OperationCanceledException) { return; }
+        catch { if (!closing) Activity = new(PetActivity.Idle, 0, default, true, "会话暂不可读"); }
+        finally { activityInFlight = false; }
+        if (closing) return;
+        if (preferred is not null && Activity.ThreadId is null) Activity = Activity with { ThreadId = preferred.ThreadId, Title = Settings.ChatTitle };
+        if (prior != Activity.State) lastInteraction = now;
+        if (now >= manualTuckUntil && Activity.State is PetActivity.Thinking or PetActivity.Tool or PetActivity.Waiting) Expand();
+        UpdateCompact(); UpdateLayer(); DataChanged?.Invoke();
+    }
+
     void UpdateCompact()
     {
         glass?.Update();
         chatStatus?.Update();
         var text = Settings.PetName + " · " + Activity.Label + " · " + (Quota is null ? "额度未连接" : string.Join(" · ", Quota.Windows.Take(2).Select(w => $"{w.DurationLabel}剩余{w.Remaining:0}%")));
-        tray.Text = text[..Math.Min(63, text.Length)];
+        text = text[..Math.Min(63, text.Length)];
+        if (tray.Text != text) tray.Text = text;
     }
 
     void Animate(object? sender, EventArgs e)
     {
         if (!IsVisible || closing) return;
         var now = DateTimeOffset.UtcNow;
-        if (lookUntil > now && !Settings.ReduceMotion) { PetImage.Source = frames[9 + lookDirection / 8][lookDirection % 8]; return; }
-        var row = Settings.ReduceMotion ? 0 : dragging ? (Forms.Cursor.Position.X < lastDragX ? 2 : 1) : gestureUntil > now ? gestureRow : Activity.State switch
+        var elapsed = animationTime.Elapsed;
+        var cursor = Forms.Cursor.Position;
+        var row = Settings.ReduceMotion ? 0 : dragging ? (cursor.X < lastDragX ? 2 : 1) : gestureUntil > now ? gestureRow : Activity.State switch
         {
             PetActivity.Thinking or PetActivity.Tool => 7,
             PetActivity.Waiting => 6,
@@ -261,21 +290,40 @@ public partial class PetWindow : Window
             PetActivity.Failed => 5,
             _ => 0
         };
-        if (row == 0 && Settings.FollowPointer && !Settings.ReduceMotion)
+        lastDragX = cursor.X;
+        var lookAtPointer = pointerAttention.Update(cursor.X, cursor.Y, elapsed, row == 0 && Settings.FollowPointer && !Settings.ReduceMotion);
+        if (currentRow != row) { currentRow = row; rowStarted = elapsed; }
+        if (lookUntil > now && !Settings.ReduceMotion) { SetPetFrame(frames[9 + lookDirection / 8][lookDirection % 8]); return; }
+        if (lookAtPointer)
         {
-            var point = PointFromScreen(new Point(Forms.Cursor.Position.X, Forms.Cursor.Position.Y));
+            var point = PointFromScreen(new Point(cursor.X, cursor.Y));
             var dx = point.X - Width / 2; var dy = point.Y - 141 * Settings.Scale;
             var distance = Math.Sqrt(dx * dx + dy * dy);
             if (distance > 42 * Settings.Scale && distance < 800 * Settings.Scale)
             {
                 var degrees = (Math.Atan2(dx, -dy) * 180 / Math.PI + 360) % 360;
                 var direction = (int)Math.Round(degrees / 22.5) % 16;
-                PetImage.Source = frames[9 + direction / 8][direction % 8]; return;
+                SetPetFrame(frames[9 + direction / 8][direction % 8]); return;
             }
         }
-        if (currentRow != row) { currentRow = row; currentFrame = 0; lastFrame = now; }
-        if (!Settings.ReduceMotion && (now - lastFrame).TotalMilliseconds >= Durations[row][currentFrame]) { currentFrame = (currentFrame + 1) % frames[row].Length; lastFrame = now; }
-        PetImage.Source = frames[row][Settings.ReduceMotion ? 0 : currentFrame];
+        SetPetFrame(frames[row][Settings.ReduceMotion ? 0 : timelines[row].FrameAt(elapsed - rowStarted)]);
+    }
+
+    void SetPetFrame(BitmapSource source)
+    {
+        if (!ReferenceEquals(PetImage.Source, source)) PetImage.Source = source;
+    }
+
+    void QueueCompanionSync()
+    {
+        if (companionSyncPending || closing) return;
+        companionSyncPending = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
+        {
+            companionSyncPending = false;
+            if (closing) return;
+            glass?.Sync(); chatStatus?.Sync();
+        }));
     }
 
     int lastDragX;
@@ -348,12 +396,15 @@ public partial class PetWindow : Window
     void Restore(bool explicitRequest)
     {
         if (explicitRequest) { manualHidden = false; fullscreenHidden = false; fullscreenOverride = NativeServices.FullscreenOnPetMonitor(this); var work = WorkArea(); if (Left < work.Left - Width || Left > work.Right || Top < work.Top || Top > work.Bottom) { Left = work.Right - Width - 24; Top = work.Bottom - Height - 24; } }
-        Show(); Expand(); ClampToScreen(); SyncGlassVisibility(); Touch();
+        Show(); Expand(); ClampToScreen(); SyncGlassVisibility(); Touch(); UpdateLayer(true);
     }
-    void UpdateLayer()
+    void UpdateLayer(bool raise = false)
     {
-        var value = Settings.LayerMode == "always" || (Settings.LayerMode == "follow" && (Activity.State is PetActivity.Thinking or PetActivity.Tool or PetActivity.Waiting or PetActivity.Complete or PetActivity.Failed || DateTimeOffset.UtcNow < speechUntil));
-        if (Topmost != value) Topmost = value; if (details is not null) details.Topmost = value; if (glass is not null) glass.Topmost = value; if (chatStatus is not null) chatStatus.Topmost = value;
+        var value = FloatingPolicy.IsTopmost(Settings.LayerMode, Activity.State, DateTimeOffset.UtcNow < speechUntil);
+        NativeServices.ApplyTopmost(this, value, raise);
+        if (glass is not null) NativeServices.ApplyTopmost(glass, value, raise);
+        if (chatStatus is not null) NativeServices.ApplyTopmost(chatStatus, value, raise);
+        if (details is not null) NativeServices.ApplyTopmost(details, value, raise);
     }
     void ConfigureHotkey()
     {

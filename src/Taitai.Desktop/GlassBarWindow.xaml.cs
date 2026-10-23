@@ -8,16 +8,22 @@ namespace Taitai.Desktop;
 public partial class GlassBarWindow : Window
 {
     readonly PetWindow pet;
+    double appliedScale = double.NaN;
     public GlassBarWindow(PetWindow pet)
     {
-        this.pet = pet; InitializeComponent(); Owner = pet;
+        this.pet = pet; InitializeComponent(); Owner = pet; Topmost = pet.Topmost;
         ShowInTaskbar = Environment.GetCommandLineArgs().Contains("--inspect");
         Loaded += (_, _) => Sync(); DpiChanged += (_, _) => Sync(); MouseEnter += (_, _) => pet.Touch();
     }
     public void Sync()
     {
-        var s = pet.Settings.Scale; Root.LayoutTransform = new ScaleTransform(s, s);
-        Width = 246 * s; Height = 60 * s; Left = pet.Left + 37 * s; Top = pet.Top + 254 * s; Topmost = pet.Topmost;
+        var s = pet.Settings.Scale;
+        if (appliedScale != s)
+        {
+            appliedScale = s; Root.LayoutTransform = new ScaleTransform(s, s);
+            Width = 246 * s; Height = 60 * s;
+        }
+        Left = pet.Left + 37 * s; Top = pet.Top + 254 * s;
     }
     public void Update()
     {

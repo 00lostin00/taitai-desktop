@@ -25,7 +25,7 @@
 | 点击底部状态 | 展开或收起上方聊天气泡 |
 | Ctrl+Alt+P | 隐藏或显示 |
 
-支持三种显示层级：跟随 AI、始终置顶、普通窗口。所在屏幕进入全屏时可自动避让。设置里还可以改名、调整大小、减少动画、开启登录启动和电池省电模式。
+默认始终置顶，空闲时也会浮在其他窗口上方。右键菜单可以直接切换；设置里还支持跟随 AI、普通窗口两种层级。所在屏幕进入全屏时可自动避让。设置里还可以改名、调整大小、减少动画、开启登录启动和电池省电模式。
 
 空闲时会随机说话、挥手或跳跃，工作和等待回答时保持安静。这些台词是本地预设，不调用模型。频率和开关都可调整，也可以自己写[互动包](docs/interaction-packs.md)。
 
@@ -44,15 +44,17 @@ ChatGPT 按钮打开已有会话，继续使用原账号和历史。输入、发
 ```powershell
 dotnet build Taitai.sln -c Release
 dotnet run --project tests/Taitai.Checks -c Release
+dotnet run --project tests/Taitai.WindowsChecks -c Release
 ./build.ps1
 ```
 
-运行文件输出到 `dist/Taitai`。检查程序覆盖额度解析、会话状态、聊天链接、互动包条件和冷却时间；加上 `-- --live` 可以检查本机 Codex 连接。
+运行文件输出到 `dist/Taitai`。核心检查覆盖额度解析、会话状态、聊天链接、互动包条件、冷却时间和动画计时；加上 `-- --live` 可以检查本机 Codex 连接。Windows 检查会短暂打开测试窗口，验证实际窗口层级、动画和刷新响应，不读取个人会话，也不保存设置。
 
 ```text
 src/Taitai.Desktop/   WPF 窗口、托盘、设置和角色素材
 src/Taitai.Core/      额度、会话事件和随机互动逻辑
 tests/Taitai.Checks/  无外部依赖的检查程序
+tests/Taitai.WindowsChecks/  Windows 悬浮与动画回归检查
 docs/                动画预览和互动包说明
 ```
 
