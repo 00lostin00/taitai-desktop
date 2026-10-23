@@ -41,7 +41,8 @@
      <CheckBox x:Name="PowerCheck" Content="使用电池时降低动画与同步频率" Click="SettingsChanged"/>
      <TextBlock Text="显示与避让" FontWeight="SemiBold" Margin="0,18,0,8"/>
      <ComboBox x:Name="LayerCombo" SelectionChanged="ComboChanged" MinHeight="30" AutomationProperties.Name="显示层级"><ComboBoxItem Content="跟着 AI · 工作、等待、刚完成时置顶"/><ComboBoxItem Content="始终置顶"/><ComboBoxItem Content="普通窗口"/></ComboBox>
-     <CheckBox x:Name="TuckCheck" Content="贴边后，空闲 10 秒自动收起" Click="SettingsChanged"/>
+     <CheckBox x:Name="TuckCheck" Content="拖到左右边缘吸附，空闲 3 秒收起" Click="SettingsChanged"/>
+     <TextBlock Text="收起后保留边缘小拉手，鼠标靠近展开；拖离边缘取消贴边。右键也能选择贴到左边或右边。" FontSize="11" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,6"/>
      <CheckBox x:Name="FullscreenCheck" Content="所在屏幕全屏时自动隐藏" Click="SettingsChanged"/>
      <CheckBox x:Name="HotkeyCheck" Content="启用全局隐藏快捷键" Click="SettingsChanged"/>
      <TextBlock x:Name="HotkeyText" FontSize="11" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>

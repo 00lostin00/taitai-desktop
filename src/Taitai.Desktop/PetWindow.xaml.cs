@@ -115,6 +115,11 @@ public partial class PetWindow : Window
             var work = WorkArea();
             Left = Settings.Left ?? work.Right - Width - 32; Top = Settings.Top ?? work.Bottom - Height - 24;
             ClampToScreen();
+            if (Settings.EdgeTuck && Settings.DockSide is "left" or "right")
+            {
+                dockSide = Settings.DockSide;
+                Left = DockedLeft(work); expandedLeft = Left;
+            }
             glass = new GlassBarWindow(this); glass.Show(); glass.Sync();
             chatStatus = new ChatStatusWindow(this); SyncGlassVisibility(); UpdateLayer();
             animation.Tick += Animate; animation.Start();
@@ -153,23 +158,33 @@ public partial class PetWindow : Window
         var floatItem = new MenuItem { Header = "始终悬浮在其他窗口上方", IsCheckable = true };
         floatItem.Click += (_, _) => { Settings.LayerMode = floatItem.IsChecked ? "always" : "follow"; ApplySettings(); UpdateLayer(true); };
         menu.Items.Add(floatItem);
+        var edgeItem = new MenuItem { Header = "贴边自动收起", IsCheckable = true };
+        edgeItem.Click += (_, _) => { Settings.EdgeTuck = edgeItem.IsChecked; ApplySettings(); };
+        menu.Items.Add(edgeItem);
+        var dockMenu = new MenuItem { Header = "贴到屏幕边缘" };
+        var leftDock = new MenuItem { Header = "左边" }; leftDock.Click += (_, _) => DockToEdge("left");
+        var rightDock = new MenuItem { Header = "右边" }; rightDock.Click += (_, _) => DockToEdge("right");
+        dockMenu.Items.Add(leftDock); dockMenu.Items.Add(rightDock); menu.Items.Add(dockMenu);
         menu.Items.Add(new Separator());
-        Item("收起到最近的屏幕边缘", () => { var w = WorkArea(); dockSide = Left + Width / 2 < w.Left + w.Width / 2 ? "left" : "right"; manualTuckUntil = DateTimeOffset.UtcNow.AddMinutes(1); Tuck(); });
+        Item("立即贴边收起", () => { var w = WorkArea(); DockToEdge(Left + Width / 2 < w.Left + w.Width / 2 ? "left" : "right"); });
         Item("暂时隐藏（Ctrl+Alt+P 恢复）", HideManually);
         Item("退出苔苔", Close);
-        menu.Opened += (_, _) => { floatItem.IsChecked = Settings.LayerMode == "always"; lastInteraction = DateTimeOffset.UtcNow; Expand(); };
+        menu.Opened += (_, _) => { floatItem.IsChecked = Settings.LayerMode == "always"; edgeItem.IsChecked = Settings.EdgeTuck; lastInteraction = DateTimeOffset.UtcNow; Expand(); };
         return menu;
     }
 
     public void ApplySettings()
     {
+        // Restore the expanded position before changing dimensions or disabling docking.
+        if (tucked) Expand();
         UpdateLayer();
         var scale = Math.Clamp(Settings.Scale, .75, 1.4);
         CanvasRoot.LayoutTransform = new ScaleTransform(scale, scale);
         Width = 320 * scale; Height = 308 * scale;
         NameText.Text = Settings.PetName; NameText.Visibility = Settings.ShowName && !tucked ? Visibility.Visible : Visibility.Collapsed;
         ConfigureHotkey(); glass?.Sync(); chatStatus?.Sync(); SyncGlassVisibility();
-        if (!Settings.EdgeTuck) Expand();
+        if (!Settings.EdgeTuck) { dockSide = ""; Settings.DockSide = ""; }
+        else if (dockSide.Length > 0) { Left = DockedLeft(WorkArea()); expandedLeft = Left; }
         if (IsLoaded && !tucked) ClampToScreen();
         Settings.Save();
     }
@@ -235,11 +250,10 @@ public partial class PetWindow : Window
         if (now >= speechUntil) SpeechBubble.Visibility = Visibility.Collapsed;
         if (Settings.IdleInteraction && IsVisible && !tucked && !dragging && !IsMouseOver && glass?.IsMouseOver != true && details is null && !ContextMenu.IsOpen && Activity.State == PetActivity.Idle && (now - lastInteraction).TotalSeconds > 45 && now >= nextIdle)
             RandomInteraction(false);
-        if (Settings.EdgeTuck && !dragging && !IsMouseOver && details is null && !ContextMenu.IsOpen && Activity.State is PetActivity.Idle or PetActivity.Complete && (now - lastInteraction).TotalSeconds > 10)
+        if (Settings.EdgeTuck && IsVisible && !tucked && !dragging && !IsMouseOver && glass?.IsMouseOver != true && chatStatus?.IsMouseOver != true && details is null && !ContextMenu.IsOpen && Activity.State is PetActivity.Idle or PetActivity.Complete && (now - lastInteraction).TotalSeconds > 3 && now >= speechUntil)
         {
             var work = WorkArea();
-            if (Math.Abs(Left - work.Left) < 25) dockSide = "left";
-            if (Math.Abs(work.Right - (Left + Width)) < 25) dockSide = "right";
+            dockSide = NearestDockSide(work);
             if (dockSide.Length > 0) Tuck();
         }
     }
@@ -282,6 +296,12 @@ public partial class PetWindow : Window
         var now = DateTimeOffset.UtcNow;
         var elapsed = animationTime.Elapsed;
         var cursor = Forms.Cursor.Position;
+        if (tucked)
+        {
+            var near = EdgeHandle.PointFromScreen(new Point(cursor.X, cursor.Y));
+            if (near.X >= -10 && near.X <= EdgeHandle.ActualWidth + 10 && near.Y >= -10 && near.Y <= EdgeHandle.ActualHeight + 10) Touch();
+            return;
+        }
         var row = Settings.ReduceMotion ? 0 : dragging ? (cursor.X < lastDragX ? 2 : 1) : gestureUntil > now ? gestureRow : Activity.State switch
         {
             PetActivity.Thinking or PetActivity.Tool => 7,
@@ -336,10 +356,7 @@ public partial class PetWindow : Window
         if (Math.Abs(before.X - Left) + Math.Abs(before.Y - Top) < 4) { Gesture(3); Say("嗯，摸摸头就不生气啦。"); }
         else
         {
-            ClampToScreen(); var work = WorkArea(); dockSide = "";
-            if (Left - work.Left < 25) { Left = work.Left; dockSide = "left"; }
-            else if (work.Right - (Left + Width) < 25) { Left = work.Right - Width; dockSide = "right"; }
-            Settings.Left = Left; Settings.Top = Top; Settings.Save();
+            SnapToScreenEdge();
             if (shakeCount >= 2) { Gesture(shakeCount >= 5 ? 5 : 6); Say(shakeCount >= 5 ? "哼，头发都晃成毛线团了！" : "转晕啦……让我站稳一下。"); }
         }
     }
@@ -361,12 +378,41 @@ public partial class PetWindow : Window
     }
     void Tuck()
     {
-        if (tucked) return; expandedLeft = Left; tucked = true; SyncGlassVisibility(); SpeechBubble.Visibility = Visibility.Collapsed; NameText.Visibility = Visibility.Collapsed;
-        var work = WorkArea(); Left = dockSide == "left" ? work.Left - Width / 2 + 16 : work.Right - Width / 2 - 16;
+        if (tucked || dockSide.Length == 0) return;
+        var work = WorkArea(); expandedLeft = DockedLeft(work); tucked = true;
+        Settings.DockSide = dockSide; Settings.Left = expandedLeft; Settings.Top = Top; Settings.Save();
+        SyncGlassVisibility(); SpeechBubble.Visibility = Visibility.Collapsed; NameText.Visibility = Visibility.Collapsed; PetImage.Visibility = Visibility.Collapsed;
+        EdgeHandle.HorizontalAlignment = dockSide == "left" ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        EdgeChevron.RenderTransform = new ScaleTransform(dockSide == "left" ? 1 : -1, 1);
+        EdgeHandle.Visibility = Visibility.Visible;
+        var handleWidth = EdgeHandle.Width * Settings.Scale;
+        Left = dockSide == "left" ? work.Left - Width + handleWidth : work.Right - handleWidth;
     }
     void Expand()
     {
-        if (!tucked) return; tucked = false; Left = expandedLeft; NameText.Visibility = Settings.ShowName ? Visibility.Visible : Visibility.Collapsed; ClampToScreen(); SyncGlassVisibility();
+        if (!tucked) return; tucked = false; EdgeHandle.Visibility = Visibility.Collapsed; PetImage.Visibility = Visibility.Visible;
+        Left = expandedLeft; NameText.Visibility = Settings.ShowName ? Visibility.Visible : Visibility.Collapsed; ClampToScreen(); SyncGlassVisibility();
+    }
+    void ExpandFromEdge(object sender, RoutedEventArgs e) => Touch();
+    double DockedLeft(Rect work) => dockSide == "left" ? work.Left : work.Right - Width;
+    string NearestDockSide(Rect work)
+    {
+        var left = Math.Abs(Left - work.Left); var right = Math.Abs(work.Right - (Left + Width));
+        return Math.Min(left, right) <= 32 * Settings.Scale ? (left <= right ? "left" : "right") : "";
+    }
+    public void SnapToScreenEdge()
+    {
+        ClampToScreen(); var work = WorkArea();
+        dockSide = Settings.EdgeTuck ? NearestDockSide(work) : "";
+        if (dockSide.Length > 0) Left = DockedLeft(work);
+        Settings.DockSide = dockSide; Settings.Left = Left; Settings.Top = Top; Settings.Save();
+    }
+    public void DockToEdge(string side)
+    {
+        if (side is not ("left" or "right")) throw new ArgumentException("Choose left or right.", nameof(side));
+        Expand(); Settings.EdgeTuck = true; dockSide = side;
+        Left = DockedLeft(WorkArea()); ClampToScreen();
+        manualTuckUntil = DateTimeOffset.UtcNow.AddMinutes(1); Tuck();
     }
     Rect WorkArea()
     {

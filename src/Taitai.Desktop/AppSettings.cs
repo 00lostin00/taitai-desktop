@@ -25,6 +25,7 @@ public sealed class AppSettings
     public bool FollowPointer { get; set; } = true;
     public bool LowQuotaNotice { get; set; } = true;
     public bool EdgeTuck { get; set; } = true;
+    public string DockSide { get; set; } = "";
     public bool ReduceMotion { get; set; }
     public double Scale { get; set; } = 1;
     public double? Left { get; set; }
